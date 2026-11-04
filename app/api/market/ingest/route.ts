@@ -92,7 +92,9 @@ export async function POST(request: NextRequest) {
     }
 
     const generated: Array<{ symbol: string; signal: string; score: number }> = [];
-    for (const symbol of touched) {
+    const touchedSymbols = Array.from(touched);
+    for (let index = 0; index < touchedSymbols.length; index++) {
+      const symbol = touchedSymbols[index];
       const instrument = await client.query("SELECT id FROM instruments WHERE symbol = $1", [symbol]);
       const history = await client.query(
         "SELECT close_price FROM market_candles WHERE instrument_id = $1 AND interval = '1d' ORDER BY candle_time DESC LIMIT 80",
