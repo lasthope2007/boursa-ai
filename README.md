@@ -8,6 +8,9 @@ A Persian-first Iranian capital-market analytics workspace built with Next.js, T
 - Demo signal endpoint: `GET /api/demo-signal`.
 - Neon PostgreSQL schema for instruments, daily candles, signal snapshots and paper portfolios.
 - Database-backed overview endpoint: `GET /api/market/overview`.
+- Database-backed latest signal feed: `GET /api/signals`.
+- Database health/status endpoint: `GET /api/market/health`.
+- Protected OHLCV ingestion endpoint: `POST /api/market/ingest` (requires a server-side `INGEST_API_KEY`).
 - Vercel deployment connected to the GitHub repository.
 
 ## Important data status
@@ -23,6 +26,19 @@ npm run dev
 
 Set `DATABASE_URL` in your local environment to a Neon PostgreSQL connection string. Never commit credentials.
 
+For protected ingestion, set a strong random `INGEST_API_KEY` in Vercel Project Settings → Environment Variables (Production and Preview as appropriate). Send it only as an `Authorization: Bearer ...` header; never place it in browser code or commit it. Also send `X-Market-Data-Source` with a short provider identifier.
+
+Example request body:
+```json
+{
+  "candles": [
+    { "symbol": "فملی", "time": "2026-11-03T00:00:00.000Z", "open": 8100, "high": 8500, "low": 8000, "close": 8420, "volume": 28400000 }
+  ]
+}
+```
+
+Prices must be numeric OHLCV values from a provider whose access and redistribution terms you have verified. This endpoint validates and stores submitted candles, then creates a signal snapshot once at least 51 daily closes are available. It does not fetch market data by itself.
+
 ## Database
 Run `database/schema.sql` against the Neon database to create the initial tables. The schema supports:
 - Instrument master data
@@ -31,7 +47,7 @@ Run `database/schema.sql` against the Neon database to create the initial tables
 - Simulated portfolios and simulated orders
 
 ## Next milestones
-1. Integrate and validate a permitted market-data source.
+1. Integrate and validate a permitted market-data source; the current ingestion route accepts provider-normalized OHLCV but does not scrape a provider.
 2. Build a scheduled ingestion and data-quality pipeline.
 3. Calculate indicators from persisted historical candles.
 4. Add walk-forward backtesting with fees, slippage, market hours and price-limit constraints.
