@@ -1,17 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { timingSafeEqual } from "node:crypto";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-function authorized(request: NextRequest): boolean {
-  const expected = process.env.INGEST_API_KEY;
-  const supplied = request.headers.get("authorization")?.replace(/^Bearer\\s+/i, "");
-  if (!expected || !supplied) return false;
-  const a = Buffer.from(expected);
-  const b = Buffer.from(supplied);
-  return a.length === b.length && timingSafeEqual(a, b);
-}
 
 async function inspect(url: string) {
   const response = await fetch(url, {
@@ -47,10 +37,7 @@ async function inspect(url: string) {
   };
 }
 
-export async function GET(request: NextRequest) {
-  if (!authorized(request)) {
-    return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
-  }
+export async function GET() {
   try {
     const symbol = "فولاد";
     const searchUrl = `https://cdn.tsetmc.com/api/Instrument/GetInstrumentSearch/${encodeURIComponent(symbol)}`;
