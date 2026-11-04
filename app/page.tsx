@@ -1,56 +1,170 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
-import { Activity, ArrowDownRight, ArrowUpRight, Bell, ChartNoAxesCombined, Search, ShieldCheck, Sparkles, Star, Wallet } from "lucide-react";
 
-type Stock = {symbol:string;name:string;price:number;change:number;volume:string;sector:string;signal:"خرید"|"نگهداری"|"فروش";score:number;reason:string};
-const stocks:Stock[]=[
- {symbol:"فملی",name:"ملی صنایع مس ایران",price:8420,change:1.82,volume:"۲۸.۴M",sector:"فلزات اساسی",signal:"خرید",score:82,reason:"میانگین کوتاه‌مدت بالاتر از بلندمدت؛ مومنتوم مثبت در داده نمونه"},
- {symbol:"فولاد",name:"فولاد مبارکه اصفهان",price:5120,change:-.64,volume:"۱۹.۱M",sector:"فلزات اساسی",signal:"نگهداری",score:56,reason:"روند خنثی؛ شواهد کافی برای تغییر وضعیت وجود ندارد"},
- {symbol:"شپنا",name:"پالایش نفت اصفهان",price:3260,change:2.31,volume:"۳۵.۷M",sector:"فرآورده نفتی",signal:"خرید",score:76,reason:"شتاب مثبت و شکست فرضی محدوده کوتاه‌مدت"},
- {symbol:"وبملت",name:"بانک ملت",price:2780,change:.95,volume:"۴۱.۲M",sector:"بانک‌ها",signal:"نگهداری",score:61,reason:"روند ملایم مثبت؛ تأیید حجم در داده نمونه ناقص است"},
- {symbol:"خودرو",name:"ایران خودرو",price:304,change:-1.25,volume:"۶۸.۹M",sector:"خودرو",signal:"فروش",score:79,reason:"مومنتوم منفی و قرارگیری زیر میانگین کوتاه‌مدت در داده نمونه"},
- {symbol:"شستا",name:"سرمایه‌گذاری تأمین اجتماعی",price:1260,change:.42,volume:"۱۲.۸M",sector:"سرمایه‌گذاری",signal:"نگهداری",score:52,reason:"قدرت روند پایین؛ بهتر است تا داده بیشتر در وضعیت خنثی بماند"}
-];
-type ApiSignal = { symbol:string; company_name:string; sector:string|null; signal:"BUY"|"HOLD"|"SELL"; score:number; reasons:string[]; data_source:string; generated_at:string; close_price:string|null; volume:string|null; candle_time:string|null };
-type MarketStatus = { mode:string; data?:{activeInstruments:number;realDailyCandles:number;realSignalSnapshots:number;latestCandleAt:string|null;dataFreshness:"RECENT"|"STALE"|"NO_DATA";dataSources:string[]} };
-const fmt=(n:number)=>new Intl.NumberFormat("fa-IR").format(n);
-const signalClass=(s:Stock["signal"])=>s==="خرید"?"buy":s==="فروش"?"sell":"hold";
-const series=[32,35,31,39,37,42,40,45,42,49,47,53,50,57,54,61,58,64,62,69,65,73,70,76,72,80,77,84,81,89,86,92];
-function Chart(){const pts=series.map((v,i)=>`${i/(series.length-1)*1000},${190-v*1.7}`).join(" ");return <div className="chart"><svg viewBox="0 0 1000 190" preserveAspectRatio="none" role="img" aria-label="نمودار نمونه قیمت"><defs><linearGradient id="fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#35d3a5" stopOpacity=".28"/><stop offset="100%" stopColor="#35d3a5" stopOpacity="0"/></linearGradient></defs><polygon points={`0,190 ${pts} 1000,190`} fill="url(#fill)"/><polyline points={pts} fill="none" stroke="#35d3a5" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/></svg></div>}
-export default function Home(){
- const [selected,setSelected]=useState("فملی");const [query,setQuery]=useState("");const [filter,setFilter]=useState("همه");const [watch,setWatch]=useState(["فملی","فولاد","شپنا","وبملت"]);const [tab,setTab]=useState("signals");const [dbStocks,setDbStocks]=useState<Stock[]>([]);const [feedStatus,setFeedStatus]=useState<"loading"|"demo"|"database">("loading");const [marketStatus,setMarketStatus]=useState<MarketStatus|null>(null);
- useEffect(()=>{let alive=true;fetch("/api/signals",{cache:"no-store"}).then(r=>r.ok?r.json():Promise.reject()).then((payload:{signals?:ApiSignal[]})=>{if(!alive)return;const mapped=(payload.signals??[]).map(s=>({symbol:s.symbol,name:s.company_name,price:Number(s.close_price??0),change:0,volume:s.volume??"—",sector:s.sector??"نامشخص",signal:s.signal==="BUY"?"خرید":s.signal==="SELL"?"فروش":"نگهداری",score:Number(s.score),reason:Array.isArray(s.reasons)?s.reasons.join(" · "):"تحلیل الگوریتمی ثبت‌شده"} as Stock));setDbStocks(mapped);setFeedStatus(mapped.length?"database":"demo");}).catch(()=>{if(alive)setFeedStatus("demo")});fetch("/api/market/status",{cache:"no-store"}).then(r=>r.ok?r.json():Promise.reject()).then((payload:MarketStatus)=>{if(alive)setMarketStatus(payload)}).catch(()=>{});return()=>{alive=false}},[]);
- const activeList=dbStocks.length?dbStocks:stocks;
- const active=activeList.find(s=>s.symbol===selected)??activeList[0];
- const visible=useMemo(()=>activeList.filter(s=>(tab!=="watch"||watch.includes(s.symbol))&&(filter==="همه"||s.signal===filter)&&(s.symbol.includes(query.trim())||s.name.includes(query.trim()))),[activeList,filter,query,tab,watch]);
- const toggle=(sym:string)=>setWatch(old=>old.includes(sym)?old.filter(x=>x!==sym):[...old,sym]);
- return <main className="shell">
-  <header className="topbar"><div className="brand"><div className="mark">ب</div><div><strong>BOURSA <span className="green">AI</span></strong><div className="sub">هوشمندی بازار سرمایه ایران</div></div></div><div className="toolbar"><span className="pill"><i className="dot"/>{feedStatus==="database"?"داده ثبت‌شده در دیتابیس":feedStatus==="loading"?"در حال بررسی داده":"محیط آزمایشی · داده نمونه"}</span><button className="pill" aria-label="اعلان‌ها"><Bell size={15}/></button></div></header>
-  <section className="hero"><div><div className="eyebrow">MARKET INTELLIGENCE / WORKSPACE</div><h1>مرکز تحلیل بازار</h1><p>پایش نمادها، ارزیابی استراتژی‌ها و بررسی سیگنال‌های الگوریتمی</p></div><span className="pill">چهارشنبه · ۱۳ آبان ۱۴۰۵</span></section>
-  <div className="notice"><ShieldCheck size={16} style={{display:"inline",verticalAlign:"middle",marginLeft:7}}/><b>شفافیت داده:</b> {feedStatus==="database"?"سیگنال‌ها از داده‌های واردشده در دیتابیس محاسبه شده‌اند؛ زمان و منبع داده را بررسی کنید. نمودار قیمت این صفحه همچنان نمایشی است.":"این صفحه هنوز داده معاملاتی ثبت‌شده ندارد؛ قیمت‌ها و سیگنال‌های قابل مشاهده نمونه هستند و به بازار زنده متصل نیستند."} امتیاز سیگنال، احتمال موفقیت نیست.</div>
-  <div className="side-note" style={{marginBottom:14}}><b>وضعیت داده بازار:</b> {marketStatus?.data?.dataFreshness==="RECENT"?"داده ثبت‌شده نسبتاً تازه":marketStatus?.data?.dataFreshness==="STALE"?"داده ثبت‌شده قدیمی است":marketStatus?.data?.dataFreshness==="NO_DATA"?"هنوز هیچ کندل واقعی از منبع بازار وارد نشده":"در حال بررسی وضعیت منبع داده"}{marketStatus?.data?` · ${fmt(marketStatus.data.realDailyCandles)} کندل · ${fmt(marketStatus.data.realSignalSnapshots)} snapshot سیگنال`:""}{marketStatus?.data?.latestCandleAt?` · آخرین ثبت: ${new Date(marketStatus.data.latestCandleAt).toLocaleString("fa-IR")}`:""}</div>\n  <section className="stats">
-   <div className="card"><div className="card-label">شاخص کل · داده نمونه</div><div className="card-value">۲,۴۸۶,۳۲۰</div><div className="tiny green">+۱.۲۴٪ · نمایشی</div></div>
-   <div className="card"><div className="card-label">ارزش معاملات · نمونه</div><div className="card-value">۱۲.۸ همت</div><div className="tiny">مقدار فرضی</div></div>
-   <div className="card"><div className="card-label">سیگنال‌های خرید · نمونه</div><div className="card-value green">{fmt(activeList.filter(s=>s.signal==="خرید").length)}</div><div className="tiny">بر اساس قواعد نمایشی</div></div>
-   <div className="card"><div className="card-label">سیگنال‌های فروش · نمونه</div><div className="card-value red">{fmt(activeList.filter(s=>s.signal==="فروش").length)}</div><div className="tiny">بر اساس قواعد نمایشی</div></div>
-  </section>
-  <section className="layout">
-   <div className="panel">
-    <div className="panel-head"><div><div className="panel-title">تحلیل نماد {active.symbol}</div><div className="panel-sub">{active.name} · {active.sector}</div></div><span className={"badge "+signalClass(active.signal)}>{active.signal}{feedStatus==="database"?" · داده ثبت‌شده":" · نمونه"}</span></div>
-    <div style={{display:"flex",alignItems:"baseline",gap:12,marginTop:15}}><strong style={{fontSize:25}}>{fmt(active.price)}</strong><span className={active.change>=0?"green":"red"} style={{fontSize:12,direction:"ltr"}}>{active.change>0?"+":""}{active.change.toLocaleString("fa-IR")}٪</span><span className="tiny">{feedStatus==="database"?"آخرین قیمت ثبت‌شده · ریال":"قیمت فرضی · ریال"}</span></div>
-    {feedStatus==="database"?<div className="side-note">نمودار تاریخی برای این نماد هنوز در رابط کاربری بارگذاری نشده است؛ قیمت آخر از آخرین کندل ثبت‌شده خوانده شده است.</div>:<Chart/>}<div className="chart-labels"><span>۰۹:۰۰</span><span>۱۰:۰۰</span><span>۱۱:۰۰</span><span>۱۲:۰۰</span><span>۱۳:۰۰</span></div>
-    <div className="tabs"><button className={tab==="signals"?"active":""} onClick={()=>setTab("signals")}>اسکنر سیگنال</button><button className={tab==="watch"?"active":""} onClick={()=>setTab("watch")}>دیده‌بان من</button><button className={tab==="method"?"active":""} onClick={()=>setTab("method")}>روش‌شناسی</button></div>
-    {tab==="method"?<div className="muted" style={{lineHeight:2.2,padding:"12px 5px"}}>در نسخه نمایشی، وضعیت‌ها از داده ساختگی و قواعد نمونه ساخته شده‌اند. نسخه تحلیلی باید اندیکاتورها را از سری زمانی معتبر محاسبه کند، هزینه معاملات و محدودیت‌های دامنه نوسان را لحاظ کند و سپس با داده خارج از نمونه ارزیابی شود. امتیاز نمایش‌داده‌شده رتبه‌بندی قواعد است و احتمال برد نیست.</div>:<>
-      <div className="panel-head" style={{marginTop:12,flexWrap:"wrap"}}><div className="toolbar"><Search size={15}/><input className="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="جستجوی نماد یا شرکت"/></div><div className="toolbar">{["همه","خرید","نگهداری","فروش"].map(x=><button key={x} className={"badge "+(filter===x?"neutral":"")} onClick={()=>setFilter(x)}>{x}</button>)}</div></div>
-      <div className="table-wrap"><table className="table"><thead><tr><th>نماد</th><th>قیمت ثبت‌شده / نمونه</th><th>تغییر</th><th>وضعیت الگوریتم</th><th>امتیاز قواعد</th><th>دیده‌بان</th></tr></thead><tbody>{visible.map(s=><tr key={s.symbol} onClick={()=>setSelected(s.symbol)} style={{cursor:"pointer",background:selected===s.symbol?"#17283a":"transparent"}}><td><div className="symbol">{s.symbol}</div><div className="tiny">{s.name}</div></td><td>{fmt(s.price)}</td><td className={s.change>=0?"green":"red"}>{feedStatus==="database"?"—":`${s.change>0?"+":""}${s.change.toLocaleString("fa-IR")}٪`}</td><td><span className={"badge "+signalClass(s.signal)}>{s.signal}</span></td><td><span className="signal-score">{s.score}/100</span></td><td><button aria-label="افزودن به دیده‌بان" onClick={e=>{e.stopPropagation();toggle(s.symbol)}} style={{background:"none",border:0,color:watch.includes(s.symbol)?"#e8bd65":"#74849b"}}><Star size={15} fill={watch.includes(s.symbol)?"currentColor":"none"}/></button></td></tr>)}</tbody></table></div>
-    </>}
-   </div>
-   <aside className="panel"><div className="panel-head"><div><div className="panel-title">سیگنال‌های منتخب</div><div className="panel-sub">{feedStatus==="database"?"آخرین خروجی ذخیره‌شده در دیتابیس":"خروجی الگوریتم نمایشی · نه داده زنده"}</div></div><Sparkles size={17} className="green"/></div>
-    <div className="list">{activeList.filter(s=>s.signal!=="نگهداری").map(s=><div className="row" key={s.symbol}><button onClick={()=>setSelected(s.symbol)}><b>{s.symbol}</b><div className="tiny">{s.name}</div></button><span className={"badge "+signalClass(s.signal)}>{s.signal}</span><b className="signal-score">{s.score}</b></div>)}</div>
-    <div style={{borderTop:"1px solid var(--line)",marginTop:15,paddingTop:14}}><div className="panel-title">وضعیت سامانه</div>{[["منبع داده","نمونه داخلی"],["به‌روزرسانی","غیرفعال"],["اتصال کارگزاری","غیرفعال"],["موتور سفارش","غیرفعال"],["محیط معاملات","شبیه‌سازی آتی"]].map(([a,b])=><div key={a} style={{display:"flex",justifyContent:"space-between",padding:"9px 0",borderBottom:"1px solid #1d2a3b",fontSize:10,color:"var(--muted)"}}><span>{a}</span><b style={{color:"#dce6f4"}}>{b}</b></div>)}</div>
-    <div className="side-note"><b><Wallet size={14} style={{display:"inline",verticalAlign:"middle",marginLeft:5}}/> گام بعدی محصول</b><br/>اتصال منبع داده مجاز، ساخت موتور اندیکاتورها، ثبت دلیل سیگنال و افزودن بک‌تست با کارمزد و محدودیت‌های واقعی بازار.</div>
-   </aside>
-  </section>
-  <footer className="footer"><span>BOURSA AI · نسخه توسعه اولیه</span><span>داده و سیگنال نمایشی · بدون اجرای سفارش · بدون توصیه سرمایه‌گذاری</span></footer>
- </main>;
+import { useEffect, useMemo, useState } from "react";
+import { Activity, AlertTriangle, Clock3, Database, Search, ShieldCheck, Sparkles, Star, TrendingDown, TrendingUp, Minus } from "lucide-react";
+
+type ApiSignal = {
+  symbol: string;
+  company_name: string;
+  sector: string | null;
+  signal: "BULLISH" | "NEUTRAL" | "BEARISH";
+  score: number;
+  reasons: string[];
+  data_source: string;
+  generated_at: string;
+  close_price: string | null;
+  volume: string | null;
+  candle_time: string | null;
+  change_pct: string | null;
+};
+type MarketStatus = {
+  ok: boolean;
+  mode: string;
+  data?: {
+    activeInstruments: number;
+    realDailyCandles: number;
+    realSignalSnapshots: number;
+    latestCandleAt: string | null;
+    latestSignalAt: string | null;
+    candleAgeHours: number | null;
+    dataSources: string[];
+    dataFreshness: "RECENT" | "STALE" | "NO_DATA";
+  };
+};
+const fmt = (n: number) => new Intl.NumberFormat("fa-IR", { maximumFractionDigits: 2 }).format(n);
+const dateFmt = (value: string | null) => value ? new Date(value).toLocaleString("fa-IR", { dateStyle: "medium", timeStyle: "short" }) : "ثبت نشده";
+const signalLabel = (s: ApiSignal["signal"]) => s === "BULLISH" ? "تمایل مثبت" : s === "BEARISH" ? "تمایل منفی" : "خنثی";
+const signalClass = (s: ApiSignal["signal"]) => s === "BULLISH" ? "buy" : s === "BEARISH" ? "sell" : "hold";
+const SignalIcon = ({ signal }: { signal: ApiSignal["signal"] }) => signal === "BULLISH" ? <TrendingUp size={15}/> : signal === "BEARISH" ? <TrendingDown size={15}/> : <Minus size={15}/>;
+
+export default function Home() {
+  const [signals, setSignals] = useState<ApiSignal[]>([]);
+  const [status, setStatus] = useState<MarketStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [selected, setSelected] = useState("");
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState("همه");
+  const [watch, setWatch] = useState<string[]>([]);
+  const [tab, setTab] = useState("signals");
+
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try {
+        const [signalResponse, statusResponse] = await Promise.all([
+          fetch("/api/signals", { cache: "no-store" }),
+          fetch("/api/market/status", { cache: "no-store" })
+        ]);
+        if (!signalResponse.ok || !statusResponse.ok) throw new Error("API unavailable");
+        const signalPayload = await signalResponse.json();
+        const statusPayload = await statusResponse.json();
+        if (!alive) return;
+        const rows = Array.isArray(signalPayload.signals) ? signalPayload.signals : [];
+        setSignals(rows);
+        setStatus(statusPayload);
+        setSelected(current => current && rows.some((r: ApiSignal) => r.symbol === current) ? current : (rows[0]?.symbol ?? ""));
+        setError(false);
+      } catch {
+        if (alive) setError(true);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    };
+    load();
+    const interval = window.setInterval(load, 60_000);
+    return () => { alive = false; window.clearInterval(interval); };
+  }, []);
+
+  const filtered = useMemo(() => signals.filter(s => {
+    const matchesQuery = !query.trim() || s.symbol.includes(query.trim()) || s.company_name.includes(query.trim());
+    const matchesFilter = filter === "همه" || signalLabel(s.signal) === filter;
+    const matchesWatch = tab !== "watch" || watch.includes(s.symbol);
+    return matchesQuery && matchesFilter && matchesWatch;
+  }), [signals, query, filter, tab, watch]);
+  const active = signals.find(s => s.symbol === selected) ?? signals[0];
+  const freshness = status?.data?.dataFreshness ?? "NO_DATA";
+  const freshnessLabel = freshness === "RECENT" ? "داده تازه ثبت‌شده" : freshness === "STALE" ? "داده قدیمی" : "بدون داده بازار";
+  const toggleWatch = (symbol: string) => setWatch(old => old.includes(symbol) ? old.filter(x => x !== symbol) : [...old, symbol]);
+
+  return <main className="shell">
+    <header className="topbar">
+      <div className="brand"><div className="mark">ب</div><div><strong>BOURSA <span className="green">AI</span></strong><div className="sub">سامانه تحلیل و پایش بازار سرمایه</div></div></div>
+      <div className="toolbar">
+        <span className="pill"><i className="dot" style={{background:freshness === "RECENT" ? "#35d3a5" : "#e7b45d"}}/>{loading ? "در حال اتصال..." : freshnessLabel}</span>
+        <span className="pill"><Database size={14} style={{display:"inline",verticalAlign:"middle",marginLeft:6}}/>{status?.data?.realDailyCandles ? fmt(status.data.realDailyCandles) + " کندل واقعی" : "داده ثبت‌شده: صفر"}</span>
+      </div>
+    </header>
+
+    <section className="hero">
+      <div><div className="eyebrow">MARKET INTELLIGENCE / ANALYTICS</div><h1>مرکز تحلیل بازار</h1><p>پایش نمادها، تحلیل تکنیکال قابل توضیح و ارزیابی وضعیت داده‌ها</p></div>
+      <span className="pill"><Clock3 size={14} style={{display:"inline",verticalAlign:"middle",marginLeft:6}}/>آخرین کندل: {dateFmt(status?.data?.latestCandleAt ?? null)}</span>
+    </section>
+
+    <div className="notice">
+      <ShieldCheck size={16} style={{display:"inline",verticalAlign:"middle",marginLeft:7}}/>
+      <b>اطلاعیه ریسک:</b> خروجی‌ها صرفاً تحلیل الگوریتمی و آموزشی‌اند؛ نه توصیه شخصی یا تضمین نتیجه. تصمیم نهایی و بررسی ریسک بر عهده استفاده‌کننده است. امتیاز ۰ تا ۱۰۰ احتمال موفقیت نیست.
+    </div>
+
+    {error && <div className="notice"><AlertTriangle size={16} style={{display:"inline",verticalAlign:"middle",marginLeft:7}}/>دریافت اطلاعات از سرور ناموفق بود. وضعیت اتصال را بررسی کنید.</div>}
+
+    <section className="stats">
+      <div className="card"><div className="card-label">نمادهای فعال در سامانه</div><div className="card-value">{fmt(status?.data?.activeInstruments ?? 0)}</div><div className="tiny">فهرست نمادهای تعریف‌شده</div></div>
+      <div className="card"><div className="card-label">کندل‌های واقعی ذخیره‌شده</div><div className="card-value">{fmt(status?.data?.realDailyCandles ?? 0)}</div><div className="tiny">بدون داده ساختگی</div></div>
+      <div className="card"><div className="card-label">تحلیل‌های ذخیره‌شده</div><div className="card-value">{fmt(status?.data?.realSignalSnapshots ?? 0)}</div><div className="tiny">خروجی موتور شاخص‌ها</div></div>
+      <div className="card"><div className="card-label">وضعیت تازگی داده</div><div className="card-value" style={{fontSize:18}}>{freshnessLabel}</div><div className="tiny">بر اساس زمان آخرین کندل</div></div>
+    </section>
+
+    <section className="layout">
+      <div className="panel">
+        <div className="panel-head"><div><div className="panel-title">اسکنر تحلیلی نمادها</div><div className="panel-sub">برچسب‌ها جهت‌گیری شاخص‌ها را توصیف می‌کنند و فرمان معامله نیستند.</div></div><span className="badge neutral">{fmt(signals.length)} نماد دارای تحلیل</span></div>
+        <div className="tabs">
+          <button className={tab === "signals" ? "active" : ""} onClick={() => setTab("signals")}>همه تحلیل‌ها</button>
+          <button className={tab === "watch" ? "active" : ""} onClick={() => setTab("watch")}>دیده‌بان من ({fmt(watch.length)})</button>
+          <button className={tab === "method" ? "active" : ""} onClick={() => setTab("method")}>روش‌شناسی</button>
+        </div>
+        {tab === "method" ? <div className="muted" style={{lineHeight:2.25,padding:"14px 5px"}}>
+          <b>استراتژی فعلی: SMA 20/50 + RSI 14</b><br/>
+          موتور تحلیل، میانگین متحرک ۲۰ و ۵۰ روزه و شاخص قدرت نسبی ۱۴ دوره‌ای را از قیمت‌های پایانی ذخیره‌شده محاسبه می‌کند. جهت‌گیری مثبت/منفی از هم‌راستایی این شاخص‌ها به دست می‌آید.<br/>
+          <b>محدودیت‌ها:</b> این نسخه هنوز بک‌تست خارج از نمونه، تعدیل کامل افزایش سرمایه و سود نقدی، کنترل توقف نماد، کارمزد و لغزش قیمت را به‌طور کامل اعتبارسنجی نکرده است. امتیاز، امتیاز قواعد است و احتمال سود نیست.
+        </div> : <>
+          <div className="panel-head" style={{marginTop:12,flexWrap:"wrap"}}>
+            <div className="toolbar"><Search size={15}/><input className="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="جستجوی نماد یا شرکت"/></div>
+            <div className="toolbar">{["همه","تمایل مثبت","خنثی","تمایل منفی"].map(x=><button key={x} className={"badge "+(filter===x ? "neutral" : "")} onClick={()=>setFilter(x)}>{x}</button>)}</div>
+          </div>
+          <div className="table-wrap"><table className="table"><thead><tr><th>نماد</th><th>آخرین قیمت پایانی</th><th>جهت‌گیری شاخص‌ها</th><th>امتیاز قواعد</th><th>زمان تحلیل</th><th>دیده‌بان</th></tr></thead>
+            <tbody>{filtered.map(s=><tr key={s.symbol} onClick={()=>setSelected(s.symbol)} style={{cursor:"pointer",background:selected===s.symbol ? "#17283a" : "transparent"}}>
+              <td><div className="symbol">{s.symbol}</div><div className="tiny">{s.company_name}</div></td>
+              <td>{s.close_price ? fmt(Number(s.close_price)) : "—"} <div className="tiny">ریال</div></td>
+              <td><span className={"badge "+signalClass(s.signal)}><SignalIcon signal={s.signal}/> {signalLabel(s.signal)}</span></td>
+              <td><span className="signal-score">{fmt(s.score)}/100</span></td>
+              <td><span className="tiny">{dateFmt(s.generated_at)}</span></td>
+              <td><button aria-label="تغییر وضعیت دیده‌بان" onClick={e=>{e.stopPropagation();toggleWatch(s.symbol)}} style={{background:"none",border:0,color:watch.includes(s.symbol)?"#e8bd65":"#74849b"}}><Star size={15} fill={watch.includes(s.symbol)?"currentColor":"none"}/></button></td>
+            </tr>)}</tbody></table></div>
+          {filtered.length === 0 && <div className="empty-state"><Activity size={28}/><b>{loading ? "در حال بارگذاری تحلیل‌ها..." : tab === "watch" && watch.length === 0 ? "هنوز نمادی به دیده‌بان اضافه نکرده‌اید" : "تحلیل معتبری برای نمایش وجود ندارد"}</b><span>{signals.length === 0 ? "تا زمان اتصال منبع داده و ورود تاریخچه معتبر، هیچ سیگنال ساختگی نمایش داده نمی‌شود." : "فیلتر یا عبارت جستجو را تغییر دهید."}</span></div>}
+        </>}
+      </div>
+
+      <aside className="panel">
+        <div className="panel-head"><div><div className="panel-title">جزئیات تحلیل</div><div className="panel-sub">{active ? active.symbol + " · " + active.company_name : "نمادی انتخاب نشده"}</div></div><Sparkles size={17} className="green"/></div>
+        {active ? <>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:18}}>
+            <span className={"badge "+signalClass(active.signal)}><SignalIcon signal={active.signal}/> {signalLabel(active.signal)}</span>
+            <b className="signal-score">{fmt(active.score)}/100</b>
+          </div>
+          <div className="side-note"><b>توضیح موتور:</b><br/>{active.reasons?.length ? active.reasons.join(" ") : "دلیل ثبت‌شده‌ای وجود ندارد."}</div>
+          <div className="detail-list">
+            <div><span>قیمت پایانی</span><b>{active.close_price ? fmt(Number(active.close_price)) + " ریال" : "—"}</b></div>
+            <div><span>حجم</span><b>{active.volume ? fmt(Number(active.volume)) : "—"}</b></div>
+            <div><span>منبع داده</span><b>{active.data_source || "نامشخص"}</b></div>
+            <div><span>زمان کندل</span><b>{dateFmt(active.candle_time)}</b></div>
+            <div><span>زمان محاسبه</span><b>{dateFmt(active.generated_at)}</b></div>
+          </div>
+        </> : <div className="empty-state compact"><Activity size={25}/><b>هنوز تحلیلی موجود نیست</b><span>پس از ورود حداقل ۵۱ کندل روزانه معتبر برای هر نماد، موتور می‌تواند تحلیل اولیه را تولید کند.</span></div>}
+        <div className="side-note"><b>وضعیت زیرساخت</b><br/>دیتابیس: {status?.ok ? "متصل" : "در حال بررسی"}<br/>منابع داده: {status?.data?.dataSources?.length ? status.data.dataSources.join("، ") : "هنوز ثبت نشده"}<br/>به‌روزرسانی خودکار رابط: هر ۶۰ ثانیه<br/>اتصال کارگزاری و اجرای سفارش: غیرفعال</div>
+      </aside>
+    </section>
+
+    <footer className="footer"><span>BOURSA AI · نسخه تحلیلی</span><span>بدون اتصال کارگزاری · بدون اجرای سفارش · داده ساختگی در داشبورد نمایش داده نمی‌شود</span></footer>
+  </main>;
 }
