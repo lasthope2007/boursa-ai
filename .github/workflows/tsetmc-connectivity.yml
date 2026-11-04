@@ -44,3 +44,5 @@ jobs:
               except Exception as exc:
                   print(json.dumps({"name": name, "error": str(exc)}, ensure_ascii=False))
           PY
+
+# Connectivity probe maintained by Boursa AI.
