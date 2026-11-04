@@ -28,7 +28,7 @@ function authorized(request: NextRequest): boolean {
 function validCandle(row: CandleInput): boolean {
   const values = [row.open, row.high, row.low, row.close, row.volume];
   const time = Date.parse(row.time);
-  return /^[\p{L}\p{N}_-]{1,24}$/u.test(row.symbol)
+  return /^[\u0600-\u06FFa-zA-Z0-9_-]{1,24}$/.test(row.symbol)
     && Number.isFinite(time)
     && values.every(Number.isFinite)
     && row.open > 0 && row.high > 0 && row.low > 0 && row.close > 0 && row.volume >= 0
