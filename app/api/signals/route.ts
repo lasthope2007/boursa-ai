@@ -18,15 +18,15 @@ export async function GET() {
       FROM signal_snapshots s
       JOIN instruments i ON i.id = s.instrument_id
       LEFT JOIN LATERAL (
-        SELECT current.close_price, current.volume, current.candle_time,
+        SELECT latest_candle.close_price, latest_candle.volume, latest_candle.candle_time,
           (SELECT prior.close_price FROM market_candles prior
             WHERE prior.instrument_id = i.id AND prior.interval = '1d'
-              AND prior.is_synthetic = FALSE AND prior.candle_time < current.candle_time
+              AND prior.is_synthetic = FALSE AND prior.candle_time < latest_candle.candle_time
             ORDER BY prior.candle_time DESC LIMIT 1) AS previous_close
-        FROM market_candles current
-        WHERE current.instrument_id = i.id AND current.interval = '1d'
-          AND current.is_synthetic = FALSE
-        ORDER BY current.candle_time DESC LIMIT 1
+        FROM market_candles latest_candle
+        WHERE latest_candle.instrument_id = i.id AND latest_candle.interval = '1d'
+          AND latest_candle.is_synthetic = FALSE
+        ORDER BY latest_candle.candle_time DESC LIMIT 1
       ) c ON TRUE
       WHERE i.is_active = TRUE AND s.is_synthetic = FALSE
       ORDER BY i.symbol, s.generated_at DESC
