@@ -14,9 +14,9 @@ export async function GET() {
       FROM signal_snapshots s
       JOIN instruments i ON i.id = s.instrument_id
       LEFT JOIN LATERAL (
-        SELECT close_price, candle_time
+        SELECT close_price, volume, candle_time
         FROM market_candles
-        WHERE instrument_id = i.id AND interval = '1d'
+        WHERE instrument_id = i.id AND interval = '1d' AND is_synthetic = FALSE
         ORDER BY candle_time DESC LIMIT 1
       ) c ON TRUE
       WHERE i.is_active = TRUE AND s.is_synthetic = FALSE
