@@ -10,7 +10,7 @@ export async function GET() {
         i.symbol, i.company_name, i.market, i.sector,
         s.signal, s.score, s.reasons, s.indicators,
         s.strategy_key, s.data_source, s.generated_at,
-        c.close_price, c.candle_time
+        c.close_price, c.volume, c.candle_time
       FROM signal_snapshots s
       JOIN instruments i ON i.id = s.instrument_id
       LEFT JOIN LATERAL (
