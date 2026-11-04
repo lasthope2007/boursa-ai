@@ -1,0 +1,46 @@
+name: TSETMC connectivity check
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/tsetmc-connectivity.yml"
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Probe TSETMC endpoints
+        run: |
+          python - <<'PY'
+          import json
+          import urllib.request
+          import urllib.error
+
+          urls = {
+              "cdn_time": "https://cdn.tsetmc.com/api/StaticData/GetTime",
+              "cdn_search": "https://cdn.tsetmc.com/api/Instrument/GetInstrumentSearch/%D9%81%D9%88%D9%84%D8%A7%D8%AF",
+              "official_docs": "https://api.tsetmc.com/docs/",
+              "legacy_marketwatch": "https://old.tsetmc.com/tsev2/data/MarketWatchInit.aspx?h=0&r=0",
+          }
+
+          for name, url in urls.items():
+              req = urllib.request.Request(url, headers={
+                  "User-Agent": "Mozilla/5.0 (compatible; BoursaAI/1.0)",
+                  "Accept": "application/json, text/plain, */*",
+                  "Referer": "https://www.tsetmc.com/",
+              })
+              try:
+                  with urllib.request.urlopen(req, timeout=12) as response:
+                      body = response.read(1200)
+                      print(json.dumps({
+                          "name": name,
+                          "status": response.status,
+                          "content_type": response.headers.get("Content-Type"),
+                          "bytes_sampled": len(body),
+                          "preview": body[:240].decode("utf-8", "replace")
+                      }, ensure_ascii=False))
+              except Exception as exc:
+                  print(json.dumps({"name": name, "error": str(exc)}, ensure_ascii=False))
+          PY
