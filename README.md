@@ -3,63 +3,46 @@
 A Persian-first analytics workspace for the Iranian capital market, built with Next.js, TypeScript and PostgreSQL.
 
 ## Product scope
-- Market monitoring and explainable technical analysis.
-- Descriptive signal states: positive bias, neutral, and negative bias.
+- Read-only market monitoring and explainable technical analysis.
+- Descriptive trend states for educational use.
 - No brokerage integration, no order execution, and no automated trading.
 - No synthetic prices or synthetic signal fixtures in the production dashboard.
 
 ## Current capabilities
 - Responsive Persian RTL analytics dashboard.
-- Neon PostgreSQL schema for instruments, daily OHLCV candles and signal snapshots.
+- Neon PostgreSQL schema for instruments, daily OHLCV candles, quote snapshots and signal snapshots.
 - Technical indicator engine: SMA 20, SMA 50 and RSI 14.
 - Database-backed endpoints:
   - `GET /api/market/health`
   - `GET /api/market/status`
   - `GET /api/market/overview`
   - `GET /api/signals`
+  - `GET /api/market/quotes` — server-side quote refresh/cache from StreamData when configured.
 - Protected OHLCV ingestion:
   - `POST /api/market/ingest`
   - Requires `Authorization: Bearer <INGEST_API_KEY>`
   - Requires `X-Market-Data-Source`
   - Accepts 1–1000 normalized daily candles per batch.
-  - Validates OHLCV values and stores only provider-supplied data.
-  - Computes an initial signal snapshot after at least 51 daily closes.
-- Dashboard refreshes market status and analysis every 60 seconds.
+- Quote snapshots are stored separately from daily candles. Intraday quotes are never mislabeled as daily candles.
+
+## StreamData provider setup
+The app includes a server-side REST adapter for StreamData's documented `getLive` endpoint. The provider documents one symbol per request and a REST limit of 60 requests/minute. Its public documentation examples do not establish the exact identifiers for the six configured Tehran symbols, so do not guess them.
+
+Set these server-only Vercel Production environment variables after obtaining the provider's authorized symbol identifiers:
+- `STREAMDATA_API_TOKEN`: private API token. Never commit it or expose it to browser code.
+- `STREAMDATA_SYMBOL_MAP`: JSON object mapping each Boursa AI symbol to the exact provider symbol ID, e.g. `{"فملی":"<provider-symbol-id>","فولاد":"<provider-symbol-id>"}`.
+- `STREAMDATA_PRICE_UNIT`: set to `IRR` or `TOMAN` only after the provider confirms the unit. Otherwise leave unset; the app labels it unverified.
+
+The adapter refreshes no more than once per 55 seconds per shared database lock, validates timestamps and OHLC values, and stores quote snapshots with source timestamps. It does not log in to Mofid or Agah and does not bypass anti-bot controls.
 
 ## Data provider status and limitations
-The application does not currently fetch market data from TSETMC or another provider by itself. It accepts normalized data through the protected ingestion endpoint. Do not describe any quote as real-time until a permitted provider has been integrated and its timestamps, delays, symbol mapping, adjustment policy, rate limits and redistribution terms have been verified.
+The app is not considered live until a provider token and verified symbol mappings are configured and the quote endpoint returns fresh provider timestamps. A snapshot feed is not the same as an exchange tick-by-tick stream. Confirm latency, market coverage, price units, symbol IDs, redistribution permission and terms with the provider before public display.
 
-TSETMC announced a newer REST web service and recommends REST for new development. Its documentation is published at https://api.tsetmc.com/docs/. The documentation host was not reachable during the latest implementation review, so endpoint contracts have deliberately not been guessed. Community endpoint catalogs are useful for investigation but are unofficial and may change without notice.
-
-## Ingestion payload
-```json
-{
-  "candles": [
-    {
-      "symbol": "فملی",
-      "time": "2026-11-03T00:00:00.000Z",
-      "open": 8100,
-      "high": 8500,
-      "low": 8000,
-      "close": 8420,
-      "volume": 28400000
-    }
-  ]
-}
-```
-
-Prices must come from a verified data source. Never send the ingestion key from browser code or commit it to the repository.
+## Existing daily-candle ingestion
+`POST /api/market/ingest` stores normalized provider-supplied daily OHLCV candles and computes an initial indicator snapshot after sufficient history is available. It does not turn intraday quotes into daily history.
 
 ## Analysis methodology
 The current rule engine compares SMA 20 and SMA 50 and evaluates RSI 14. The 0–100 score is a rule-alignment score, not a probability of profit or accuracy. This initial strategy is not yet validated with walk-forward/out-of-sample backtests, corporate-action adjustments, trading fees, slippage, suspensions or price-limit constraints. Treat its outputs as educational analytics only.
-
-## Production checklist
-1. Confirm a provider's permission, coverage, latency, terms and endpoint schema.
-2. Implement and schedule a provider adapter with retries, rate limiting, data-quality checks and monitoring.
-3. Backfill adjusted historical candles and validate symbol mappings.
-4. Add walk-forward backtests with realistic fees, slippage and market restrictions.
-5. Add user authentication and private watchlists only after access-control review.
-6. Add monitoring, alerting, backups and operational documentation.
 
 ## Local development
 ```bash
@@ -69,4 +52,4 @@ npm run dev
 Set `DATABASE_URL` and `INGEST_API_KEY` as server-side environment variables. Never commit secrets.
 
 ## Risk disclosure
-All outputs are algorithmic summaries, not personalized financial advice, guarantees or instructions to trade. Market data may be delayed, incomplete, adjusted or incorrect. Users must independently assess suitability and risk. The app never connects to brokerage accounts or submits orders.
+All outputs are algorithmic summaries, not personalized financial advice, guarantees or instructions to trade. Market data may be delayed, incomplete, adjusted or incorrect. The app never connects to brokerage accounts or submits orders.
