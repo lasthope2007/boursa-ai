@@ -102,7 +102,7 @@ export async function GET() {
     }
 
     const failures: string[] = [];
-    for (const instrument of configured) {
+    await Promise.all(configured.map(async (instrument: { id: number; symbol: string }) => {
       try {
         const quote = await fetchStreamDataQuote(symbolMap[instrument.symbol]);
         await client.query(`
@@ -130,7 +130,7 @@ export async function GET() {
         console.error("StreamData quote fetch failed", instrument.symbol, error);
         failures.push(instrument.symbol);
       }
-    }
+    }));
 
     const quotes = await readLatest(client);
     await client.query("COMMIT");
