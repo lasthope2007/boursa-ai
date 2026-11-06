@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { PoolClient } from "pg";
 import { db } from "@/lib/db";
 import { fetchStreamDataQuote, getStreamDataSymbolMap } from "@/lib/market-data/streamdata";
 
@@ -9,7 +10,7 @@ export const maxDuration = 30;
 const PROVIDER = "streamdata";
 const REFRESH_WINDOW_MS = 55_000;
 
-async function readLatest(client: Awaited<ReturnType<typeof db.connect>>) {
+async function readLatest(client: PoolClient) {
   const result = await client.query(`
     SELECT i.symbol, i.company_name, q.provider_symbol, q.last_price,
       q.open_price, q.high_price, q.low_price, q.volume, q.quote_time,
