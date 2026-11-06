@@ -13,6 +13,9 @@ export async function GET() {
         (SELECT COUNT(*)::int FROM signal_snapshots WHERE is_synthetic = FALSE) AS real_signal_snapshots,
         (SELECT MAX(candle_time) FROM market_candles WHERE interval = '1d' AND is_synthetic = FALSE) AS latest_candle_at,
         (SELECT MAX(generated_at) FROM signal_snapshots WHERE is_synthetic = FALSE) AS latest_signal_at,
+        (SELECT COUNT(*)::int FROM market_quotes) AS quote_snapshots,
+        (SELECT MAX(quote_time) FROM market_quotes) AS latest_quote_at,
+        (SELECT MAX(fetched_at) FROM market_quotes) AS latest_quote_fetched_at,
         (SELECT COALESCE(array_agg(DISTINCT source ORDER BY source), ARRAY[]::text[])
           FROM market_candles WHERE interval = '1d' AND is_synthetic = FALSE) AS data_sources
     `);
@@ -20,19 +23,24 @@ export async function GET() {
     const row = result.rows[0];
     const latestCandleAt = row.latest_candle_at ? new Date(row.latest_candle_at).toISOString() : null;
     const latestSignalAt = row.latest_signal_at ? new Date(row.latest_signal_at).toISOString() : null;
+    const latestQuoteAt = row.latest_quote_at ? new Date(row.latest_quote_at).toISOString() : null;
+    const latestQuoteFetchedAt = row.latest_quote_fetched_at ? new Date(row.latest_quote_fetched_at).toISOString() : null;
     const ageHours = latestCandleAt
       ? Math.max(0, (Date.now() - Date.parse(latestCandleAt)) / 3_600_000)
       : null;
 
     return NextResponse.json({
       ok: true,
-      mode: Number(row.real_daily_candles) > 0 ? "DATABASE" : "DEMO",
+      mode: Number(row.real_daily_candles) > 0 ? "DATABASE" : Number(row.quote_snapshots) > 0 ? "LIVE_QUOTES" : "DEMO",
       data: {
         activeInstruments: Number(row.active_instruments),
         realDailyCandles: Number(row.real_daily_candles),
         realSignalSnapshots: Number(row.real_signal_snapshots),
         latestCandleAt,
         latestSignalAt,
+        quoteSnapshots: Number(row.quote_snapshots),
+        latestQuoteAt,
+        latestQuoteFetchedAt,
         candleAgeHours: ageHours === null ? null : Number(ageHours.toFixed(2)),
         dataSources: row.data_sources,
         dataFreshness: ageHours === null ? "NO_DATA" : ageHours <= 36 ? "RECENT" : "STALE"
