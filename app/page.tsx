@@ -17,6 +17,20 @@ type ApiSignal = {
   candle_time: string | null;
   change_pct: string | null;
 };
+type MarketQuote = {
+  symbol: string;
+  company_name: string;
+  provider_symbol: string;
+  last_price: string;
+  open_price: string;
+  high_price: string;
+  low_price: string;
+  volume: string;
+  quote_time: string;
+  fetched_at: string;
+  price_unit: string;
+  provider: string;
+};
 type MarketStatus = {
   ok: boolean;
   mode: string;
@@ -40,6 +54,8 @@ const SignalIcon = ({ signal }: { signal: ApiSignal["signal"] }) => signal === "
 export default function Home() {
   const [signals, setSignals] = useState<ApiSignal[]>([]);
   const [status, setStatus] = useState<MarketStatus | null>(null);
+  const [quotes, setQuotes] = useState<MarketQuote[]>([]);
+  const [quoteStatus, setQuoteStatus] = useState("CHECKING");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [selected, setSelected] = useState("");
@@ -65,6 +81,15 @@ export default function Home() {
         setStatus(statusPayload);
         setSelected(current => current && rows.some((r: ApiSignal) => r.symbol === current) ? current : (rows[0]?.symbol ?? ""));
         setError(false);
+        try {
+          const quoteResponse = await fetch("/api/market/quotes", { cache: "no-store" });
+          const quotePayload = await quoteResponse.json();
+          if (!alive) return;
+          setQuotes(Array.isArray(quotePayload.quotes) ? quotePayload.quotes : []);
+          setQuoteStatus(quotePayload.status ?? (quoteResponse.ok ? "UPDATED" : "UNAVAILABLE"));
+        } catch {
+          if (alive) setQuoteStatus("UNAVAILABLE");
+        }
       } catch {
         if (alive) setError(true);
       } finally {
@@ -83,6 +108,9 @@ export default function Home() {
     return matchesQuery && matchesFilter && matchesWatch;
   }), [signals, query, filter, tab, watch]);
   const active = signals.find(s => s.symbol === selected) ?? signals[0];
+  const quoteBySymbol = useMemo(() => Object.fromEntries(quotes.map(q => [q.symbol, q])), [quotes]);
+  const activeQuote = active ? quoteBySymbol[active.symbol] as MarketQuote | undefined : undefined;
+  const priceUnitLabel = (unit?: string) => unit === "IRR" ? "ریال" : unit === "TOMAN" ? "تومان" : "واحد تأییدنشده";
   const freshness = status?.data?.dataFreshness ?? "NO_DATA";
   const freshnessLabel = freshness === "RECENT" ? "داده تازه ثبت‌شده" : freshness === "STALE" ? "داده قدیمی" : "بدون داده بازار";
   const toggleWatch = (symbol: string) => setWatch(old => old.includes(symbol) ? old.filter(x => x !== symbol) : [...old, symbol]);
@@ -93,6 +121,7 @@ export default function Home() {
       <div className="toolbar">
         <span className="pill"><i className="dot" style={{background:freshness === "RECENT" ? "#35d3a5" : "#e7b45d"}}/>{loading ? "در حال اتصال..." : freshnessLabel}</span>
         <span className="pill"><Database size={14} style={{display:"inline",verticalAlign:"middle",marginLeft:6}}/>{status?.data?.realDailyCandles ? fmt(status.data.realDailyCandles) + " کندل واقعی" : "داده ثبت‌شده: صفر"}</span>
+        <span className="pill">قیمت‌های دریافتی: {fmt(quotes.length)} · {quoteStatus === "UPDATED" || quoteStatus === "CACHED" ? "منبع متصل" : quoteStatus === "PARTIAL" ? "اتصال ناقص" : "در انتظار پیکربندی"}</span>
       </div>
     </header>
 
@@ -135,7 +164,7 @@ export default function Home() {
           <div className="table-wrap"><table className="table"><thead><tr><th>نماد</th><th>آخرین قیمت پایانی</th><th>جهت‌گیری شاخص‌ها</th><th>امتیاز قواعد</th><th>زمان تحلیل</th><th>دیده‌بان</th></tr></thead>
             <tbody>{filtered.map(s=><tr key={s.symbol} onClick={()=>setSelected(s.symbol)} style={{cursor:"pointer",background:selected===s.symbol ? "#17283a" : "transparent"}}>
               <td><div className="symbol">{s.symbol}</div><div className="tiny">{s.company_name}</div></td>
-              <td>{s.close_price ? fmt(Number(s.close_price)) : "—"} <div className="tiny">ریال</div></td>
+              <td>{quoteBySymbol[s.symbol] ? fmt(Number((quoteBySymbol[s.symbol] as MarketQuote).last_price)) : s.close_price ? fmt(Number(s.close_price)) : "—"} <div className="tiny">{quoteBySymbol[s.symbol] ? priceUnitLabel((quoteBySymbol[s.symbol] as MarketQuote).price_unit) : "قیمت پایانی · ریال"}</div></td>
               <td><span className={"badge "+signalClass(s.signal)}><SignalIcon signal={s.signal}/> {signalLabel(s.signal)}</span></td>
               <td><span className="signal-score">{fmt(s.score)}/100</span></td>
               <td><span className="tiny">{dateFmt(s.generated_at)}</span></td>
@@ -154,9 +183,12 @@ export default function Home() {
           </div>
           <div className="side-note"><b>توضیح موتور:</b><br/>{active.reasons?.length ? active.reasons.join(" ") : "دلیل ثبت‌شده‌ای وجود ندارد."}</div>
           <div className="detail-list">
-            <div><span>قیمت پایانی</span><b>{active.close_price ? fmt(Number(active.close_price)) + " ریال" : "—"}</b></div>
-            <div><span>حجم</span><b>{active.volume ? fmt(Number(active.volume)) : "—"}</b></div>
-            <div><span>منبع داده</span><b>{active.data_source || "نامشخص"}</b></div>
+            <div><span>آخرین قیمت دریافتی</span><b>{activeQuote ? fmt(Number(activeQuote.last_price)) + " " + priceUnitLabel(activeQuote.price_unit) : "هنوز دریافت نشده"}</b></div>
+            <div><span>زمان قیمت دریافتی</span><b>{dateFmt(activeQuote?.quote_time ?? null)}</b></div>
+            <div><span>قیمت پایانی تاریخی</span><b>{active.close_price ? fmt(Number(active.close_price)) + " ریال" : "—"}</b></div>
+            <div><span>حجم آخرین کندل</span><b>{active.volume ? fmt(Number(active.volume)) : "—"}</b></div>
+            <div><span>منبع قیمت زنده</span><b>{activeQuote?.provider ?? "متصل نشده"}</b></div>
+            <div><span>منبع تحلیل تاریخی</span><b>{active.data_source || "نامشخص"}</b></div>
             <div><span>زمان کندل</span><b>{dateFmt(active.candle_time)}</b></div>
             <div><span>زمان محاسبه</span><b>{dateFmt(active.generated_at)}</b></div>
           </div>
